@@ -1,0 +1,16 @@
+This is a placeholder file. Please replace this with your actual background video in WebM format for better browser compatibility and performance.
+
+Recommended video specifications:
+- Format: WebM (VP9 codec preferred)
+- Duration: 10-30 seconds for seamless looping
+- Resolution: 1920x1080 or 1280x720
+- File size: Under 5-10MB
+- Frame rate: 24-30 fps
+- Content: Abstract, ambient, neural network, digital flow, or slow waves
+- No audio track (audio handled separately)
+
+Optimization tips:
+- Use tools like FFmpeg for compression
+- Consider lower bitrate for background use
+- Test loop seamlessly (first and last frames should match)
+- Ensure mobile compatibility
