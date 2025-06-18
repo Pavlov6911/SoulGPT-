@@ -1,0 +1,11 @@
+This is a placeholder file. Please replace this with your actual ambient audio file (MP3 format, under 1MB for performance). The audio should be:
+- 2-3 seconds long
+- Subtle and ambient (soft chime, gentle whoosh, or neural network sound)
+- Low volume suitable for background
+- High quality but compressed for web delivery
+
+Recommended audio characteristics:
+- Sample rate: 44.1kHz or 48kHz
+- Bit rate: 128-192 kbps
+- Format: MP3 or OGG
+- Duration: 2-5 seconds maximum

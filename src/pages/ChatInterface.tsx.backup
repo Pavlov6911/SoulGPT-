@@ -1,0 +1,1008 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Send, Plus, Settings, HelpCircle, User, Copy, Upload, MoreHorizontal, ThumbsUp, ThumbsDown, Menu, X, FileText, Folder, ExternalLink, Sparkles, History, Clock, Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import ThemeToggle from '../components/ThemeToggle';
+
+interface Message {
+  id: string;
+  content: string;
+  sender: 'user' | 'ai';
+  timestamp: Date;
+  isExpanded?: boolean;
+}
+
+interface UploadedFile {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+}
+
+interface ChatHistory {
+  id: string;
+  title: string;
+  messages: Message[];
+  timestamp: Date;
+  lastMessage?: string;
+}
+
+const ChatInterface: React.FC = () => {
+  const navigate = useNavigate();
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputMessage, setInputMessage] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [showFilesModal, setShowFilesModal] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showHistoryPanel, setShowHistoryPanel] = useState(false);
+  const [chatHistory, setChatHistory] = useState<ChatHistory[]>([]);
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null);
+  
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Auto-save current chat to history when messages change
+  useEffect(() => {
+    if (messages.length > 0 && currentChatId) {
+      const timeoutId = setTimeout(() => {
+        saveCurrentChatToHistory();
+      }, 1000); // Debounce to avoid too frequent saves
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [messages, currentChatId]);
+
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim() && uploadedFiles.length === 0) return;
+
+    // Set current chat ID if this is a new conversation
+    if (!currentChatId && messages.length === 0) {
+      setCurrentChatId(Date.now().toString());
+    }
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      content: inputMessage,
+      sender: 'user',
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInputMessage('');
+    setUploadedFiles([]);
+    setIsTyping(true);
+
+    // Simulate AI response
+    setTimeout(() => {
+      const aiResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        content: generateAIResponse(inputMessage),
+        sender: 'ai',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, aiResponse]);
+      setIsTyping(false);
+    }, 1500);
+  };
+
+  const generateAIResponse = (userMessage: string): string => {
+    const responses = [
+      "I understand your question. Let me provide a comprehensive response that addresses your specific needs.",
+      "That's an interesting point. Here's my analysis of the situation and some recommendations.",
+      "I can help you with that. Let me break this down into clear, actionable steps.",
+      "Based on your input, here are some insights and suggestions that might be helpful."
+    ];
+    return responses[Math.floor(Math.random() * responses.length)];
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const newFiles: UploadedFile[] = files.map(file => ({
+      id: Date.now().toString() + Math.random(),
+      name: file.name,
+      type: file.type,
+      size: file.size
+    }));
+    setUploadedFiles(prev => [...prev, ...newFiles]);
+  };
+
+  const removeFile = (fileId: string) => {
+    setUploadedFiles(prev => prev.filter(file => file.id !== fileId));
+  };
+
+  const copyMessage = (content: string) => {
+    navigator.clipboard.writeText(content);
+  };
+
+
+
+  const sendFollowUp = (prompt: string) => {
+    setInputMessage(prompt);
+    setTimeout(() => handleSendMessage(), 100);
+  };
+
+  const saveCurrentChatToHistory = () => {
+    if (messages.length > 0) {
+      const chatTitle = messages[0]?.content.slice(0, 50) + (messages[0]?.content.length > 50 ? '...' : '') || 'New Chat';
+      const newChat: ChatHistory = {
+        id: currentChatId || Date.now().toString(),
+        title: chatTitle,
+        messages: [...messages],
+        timestamp: new Date(),
+        lastMessage: messages[messages.length - 1]?.content.slice(0, 100)
+      };
+      
+      setChatHistory(prev => {
+        const existingIndex = prev.findIndex(chat => chat.id === newChat.id);
+        if (existingIndex >= 0) {
+          const updated = [...prev];
+          updated[existingIndex] = newChat;
+          return updated;
+        }
+        return [newChat, ...prev];
+      });
+    }
+  };
+
+  const handleNewChat = () => {
+    saveCurrentChatToHistory();
+    setMessages([]);
+    setInputMessage('');
+    setUploadedFiles([]);
+    setCurrentChatId(null);
+    setIsMobileMenuOpen(false);
+  };
+
+  const loadChatFromHistory = (chatId: string) => {
+    const chat = chatHistory.find(c => c.id === chatId);
+    if (chat) {
+      saveCurrentChatToHistory();
+      setMessages(chat.messages);
+      setCurrentChatId(chatId);
+      setInputMessage('');
+      setUploadedFiles([]);
+      setShowHistoryPanel(false);
+    }
+  };
+
+  const deleteChatFromHistory = (chatId: string) => {
+    setChatHistory(prev => prev.filter(chat => chat.id !== chatId));
+    if (currentChatId === chatId) {
+      setMessages([]);
+      setCurrentChatId(null);
+    }
+  };
+
+  const handleHistory = () => {
+    setShowHistoryPanel(!showHistoryPanel);
+    setIsMobileMenuOpen(false);
+  };
+
+  const handleMyFiles = () => {
+    setShowFilesModal(true);
+    setIsMobileMenuOpen(false);
+  };
+
+  const handleHelp = () => {
+    setShowHelpModal(true);
+    setIsMobileMenuOpen(false);
+  };
+
+  const formatMessageContent = (content: string) => {
+    // Simple markdown-like formatting
+    return content
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/`(.*?)`/g, '<code class="bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded text-sm">$1</code>');
+  };
+
+  return (
+    <div className="flex flex-col h-screen bg-white dark:bg-black transition-colors duration-300">
+      {/* Top Navigation */}
+      <motion.header 
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        className="sticky top-0 z-50 bg-white dark:bg-black backdrop-blur-xl border-b border-black/10 dark:border-white/10 px-4 py-3"
+      >
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          {/* Left side - Logo and Navigation */}
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3">
+              <motion.button 
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="md:hidden p-2 hover:bg-black/10 dark:hover:bg-white/10 rounded-lg transition-colors"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              >
+                <Menu className="w-5 h-5 text-black dark:text-white" />
+              </motion.button>
+              <motion.h1 
+                whileHover={{ scale: 1.02 }}
+                className="text-xl font-bold text-black dark:text-white cursor-pointer hover:text-black/70 dark:hover:text-white/70 transition-colors" 
+                onClick={() => navigate('/')}
+              >
+                Soul
+              </motion.h1>
+            </div>
+            
+            {/* Desktop Navigation */}
+            <nav className="hidden md:flex items-center gap-2">
+              <motion.button 
+                whileHover={{ scale: 1.05, y: -2 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleNewChat}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-black dark:text-white hover:bg-black/10 dark:hover:bg-white/10 rounded-xl transition-all duration-300"
+              >
+                <Plus className="w-4 h-4" />
+                New Chat
+              </motion.button>
+              <motion.button 
+                whileHover={{ scale: 1.05, y: -2 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleHistory}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all duration-300 rounded-xl ${
+                  showHistoryPanel 
+                    ? 'text-white dark:text-black bg-black dark:bg-white' 
+                    : 'text-black dark:text-white hover:bg-black/10 dark:hover:bg-white/10'
+                }`}
+              >
+                <History className="w-4 h-4" />
+                History
+              </motion.button>
+              <motion.button 
+                whileHover={{ scale: 1.05, y: -2 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleMyFiles}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-black dark:text-white hover:bg-black/10 dark:hover:bg-white/10 rounded-xl transition-all duration-300"
+              >
+                <Folder className="w-4 h-4" />
+                My Files
+              </motion.button>
+              <motion.button 
+                whileHover={{ scale: 1.05, y: -2 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => navigate('/settings')}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-black dark:text-white hover:bg-black/10 dark:hover:bg-white/10 rounded-xl transition-all duration-300"
+              >
+                <Settings className="w-4 h-4" />
+                Settings
+              </motion.button>
+              <motion.button 
+                whileHover={{ scale: 1.05, y: -2 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleHelp}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-black dark:text-white hover:bg-black/10 dark:hover:bg-white/10 rounded-xl transition-all duration-300"
+              >
+                <HelpCircle className="w-4 h-4" />
+                Help
+              </motion.button>
+            </nav>
+          </div>
+
+          {/* Right side - Theme Toggle and User Avatar */}
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <motion.div 
+                whileHover={{ scale: 1.1, rotate: 5 }}
+                whileTap={{ scale: 0.9 }}
+                className="w-8 h-8 bg-black dark:bg-white rounded-full flex items-center justify-center hover:bg-black/80 dark:hover:bg-white/80 transition-all duration-300 cursor-pointer"
+              >
+              <User className="w-4 h-4 text-white dark:text-black" />
+            </motion.div>
+          </div>
+        </div>
+
+        {/* Mobile Menu */}
+        <AnimatePresence>
+          {isMobileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="md:hidden border-t border-black/10 dark:border-white/10 mt-3 pt-3"
+            >
+              <nav className="flex flex-col gap-2">
+                <motion.button 
+                  whileHover={{ x: 5 }}
+                  onClick={handleNewChat}
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-black dark:text-white hover:bg-black/10 dark:hover:bg-white/10 rounded-lg transition-all duration-300 text-left"
+                >
+                  <Plus className="w-4 h-4" />
+                  New Chat
+                </motion.button>
+                <motion.button 
+                  whileHover={{ x: 5 }}
+                  onClick={handleHistory}
+                  className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-all duration-300 text-left ${
+                    showHistoryPanel 
+                      ? 'text-white dark:text-black bg-black dark:bg-white' 
+                      : 'text-black dark:text-white hover:bg-black/10 dark:hover:bg-white/10'
+                  }`}
+                >
+                  <History className="w-4 h-4" />
+                  History
+                </motion.button>
+                <motion.button 
+                  whileHover={{ x: 5 }}
+                  onClick={handleMyFiles}
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-black dark:text-white hover:bg-black/10 dark:hover:bg-white/10 rounded-lg transition-all duration-300 text-left"
+                >
+                  <Folder className="w-4 h-4" />
+                  My Files
+                </motion.button>
+                <motion.button 
+                  whileHover={{ x: 5 }}
+                  onClick={() => { navigate('/settings'); setIsMobileMenuOpen(false); }}
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-black dark:text-white hover:bg-black/10 dark:hover:bg-white/10 rounded-lg transition-all duration-300 text-left"
+                >
+                  <Settings className="w-4 h-4" />
+                  Settings
+                </motion.button>
+                <motion.button 
+                  whileHover={{ x: 5 }}
+                  onClick={handleHelp}
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-black dark:text-white hover:bg-black/10 dark:hover:bg-white/10 rounded-lg transition-all duration-300 text-left"
+                >
+                  <HelpCircle className="w-4 h-4" />
+                  Help
+                </motion.button>
+              </nav>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.header>
+
+      {/* History Panel */}
+      <AnimatePresence>
+        {showHistoryPanel && (
+          <motion.div
+            initial={{ x: -300, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: -300, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            className="fixed left-0 top-16 bottom-0 w-80 bg-white dark:bg-black backdrop-blur-xl border-r border-black/10 dark:border-white/10 z-40 shadow-2xl"
+          >
+            <div className="flex flex-col h-full">
+              {/* History Header */}
+              <div className="p-4 border-b border-black/10 dark:border-white/10">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
+                    <History className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                    Chat History
+                  </h3>
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => setShowHistoryPanel(false)}
+                    className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-colors"
+                  >
+                    <X className="w-4 h-4 text-black/60 dark:text-white/60" />
+                  </motion.button>
+                </div>
+              </div>
+
+              {/* History List */}
+              <div className="flex-1 overflow-y-auto p-4">
+                {chatHistory.length === 0 ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-center py-8"
+                  >
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ delay: 0.2 }}
+                      className="w-16 h-16 bg-black dark:bg-white rounded-2xl flex items-center justify-center mx-auto mb-4"
+                    >
+                      <Clock className="w-8 h-8 text-white" />
+                    </motion.div>
+                    <p className="text-black/60 dark:text-white/60 text-sm">No chat history yet</p>
+                    <p className="text-black/40 dark:text-white/40 text-xs mt-1">Start a conversation to see it here</p>
+                  </motion.div>
+                ) : (
+                  <div className="space-y-2">
+                    {chatHistory.map((chat, index) => (
+                      <motion.div
+                        key={chat.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                        className={`group relative p-3 rounded-xl border transition-all duration-200 cursor-pointer ${
+                          currentChatId === chat.id
+                            ? 'bg-black/10 dark:bg-white/10 border-black/20 dark:border-white/20'
+                            : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 hover:bg-black/10 dark:hover:bg-white/10'
+                        }`}
+                        onClick={() => loadChatFromHistory(chat.id)}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-medium text-black dark:text-white text-sm truncate">
+                              {chat.title}
+                            </h4>
+                            <p className="text-xs text-black/50 dark:text-white/50 mt-1">
+                              {chat.timestamp.toLocaleDateString()} • {chat.messages.length} messages
+                            </p>
+                            {chat.lastMessage && (
+                              <p className="text-xs text-black/60 dark:text-white/60 mt-1 truncate">
+                                {chat.lastMessage}...
+                              </p>
+                            )}
+                          </div>
+                          <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteChatFromHistory(chat.id);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-all duration-200"
+                          >
+                            <Trash2 className="w-3 h-3 text-red-500" />
+                          </motion.button>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Main Chat Area */}
+      <main className={`flex-1 overflow-y-auto bg-white dark:bg-black transition-all duration-300 ${
+        showHistoryPanel ? 'ml-80' : ''
+      }`}>
+        <div className="max-w-4xl mx-auto px-4 py-6">
+          {messages.length === 0 ? (
+            /* Empty State */
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              className="flex items-center justify-center h-full min-h-[60vh]"
+            >
+              <div className="text-center">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+                  className="w-16 h-16 bg-black dark:bg-white rounded-2xl flex items-center justify-center mx-auto mb-6"
+                >
+                  <div className="text-2xl font-bold text-white dark:text-black">S</div>
+                </motion.div>
+                <motion.h2 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.4 }}
+                  className="text-3xl font-bold text-black dark:text-white mb-3"
+                >
+                  How can I help you today?
+                </motion.h2>
+                <motion.p 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.6 }}
+                  className="text-black/60 dark:text-white/60 text-lg"
+                >
+                  Start a conversation by typing a message below.
+                </motion.p>
+              </div>
+            </motion.div>
+          ) : (
+            /* Messages */
+            <div className="space-y-6">
+              {messages.map((message) => (
+                <motion.div
+                  key={message.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="group mb-6"
+                  onMouseEnter={() => setHoveredMessageId(message.id)}
+                  onMouseLeave={() => setHoveredMessageId(null)}
+                >
+                  <div className={`flex items-start gap-4 ${
+                    message.sender === 'user' ? 'flex-row-reverse' : ''
+                  }`}>
+                    {/* Avatar */}
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                      message.sender === 'user' 
+                        ? 'bg-black dark:bg-white' 
+                        : 'bg-black dark:bg-white'
+                    }`}>
+                      {message.sender === 'user' ? (
+                        <User className="w-4 h-4 text-white dark:text-black" />
+                      ) : (
+                        <div className="w-4 h-4 text-white dark:text-black font-bold text-xs flex items-center justify-center">
+                          S
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Message Content */}
+                    <div className={`flex-1 max-w-3xl ${
+                      message.sender === 'user' ? 'text-right' : ''
+                    }`}>
+                      {/* Message Text */}
+                      <div className={`inline-block p-4 rounded-2xl ${
+                        message.sender === 'user'
+                          ? 'bg-black/5 dark:bg-white/5 text-black dark:text-white'
+                          : 'bg-white dark:bg-black text-black dark:text-white border border-black/10 dark:border-white/10'
+                      }`}>
+                        <div 
+                          className="leading-relaxed"
+                          dangerouslySetInnerHTML={{ __html: formatMessageContent(message.content) }}
+                        />
+                      </div>
+
+                      {/* Message Controls */}
+                      <AnimatePresence>
+                        {hoveredMessageId === message.id && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 5 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 5 }}
+                            className={`flex items-center gap-1 mt-2 ${
+                              message.sender === 'user' ? 'justify-end' : 'justify-start'
+                            }`}
+                          >
+                            <button
+                              onClick={() => copyMessage(message.content)}
+                              className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-colors"
+                              title="Copy message"
+                            >
+                              <Copy className="w-4 h-4 text-black/60 dark:text-white/60" />
+                            </button>
+                            {message.sender === 'ai' && (
+                              <>
+                                <button className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-colors" title="Good response">
+                                  <ThumbsUp className="w-4 h-4 text-black/60 dark:text-white/60" />
+                                </button>
+                                <button className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-colors" title="Poor response">
+                                  <ThumbsDown className="w-4 h-4 text-black/60 dark:text-white/60" />
+                                </button>
+                              </>
+                            )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+
+                    {/* AI Response Actions */}
+                    {message.sender === 'ai' && (
+                      <div className="flex justify-end mt-4 pt-3">
+                        <div className="relative">
+                          <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => setOpenDropdownId(openDropdownId === message.id ? null : message.id)}
+                            className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-colors"
+                            title="Response options"
+                          >
+                            <MoreHorizontal className="w-4 h-4 text-black/60 dark:text-white/60" />
+                          </motion.button>
+                          
+                          {/* Dropdown Menu */}
+                          <AnimatePresence>
+                            {openDropdownId === message.id && (
+                              <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                                className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-black rounded-lg shadow-lg z-50"
+                              >
+                                <div className="py-2">
+                                  <button
+                                     onClick={() => {
+                                       // Reload response functionality
+                                       const messageIndex = messages.findIndex(m => m.id === message.id);
+                                       const lastUserMessage = messages.slice(0, messageIndex).reverse().find(m => m.sender === 'user');
+                                       if (lastUserMessage) {
+                                         // Remove the current AI message and regenerate
+                                         setMessages(prev => prev.filter(m => m.id !== message.id));
+                                         setInputMessage(lastUserMessage.content);
+                                         setTimeout(() => {
+                                           setInputMessage('');
+                                           setIsTyping(true);
+                                           // Generate new AI response
+                                           setTimeout(() => {
+                                             const aiResponse: Message = {
+                                               id: Date.now().toString(),
+                                               content: generateAIResponse(lastUserMessage.content),
+                                               sender: 'ai',
+                                               timestamp: new Date()
+                                             };
+                                             setMessages(prev => [...prev, aiResponse]);
+                                             setIsTyping(false);
+                                           }, 1500);
+                                         }, 100);
+                                       }
+                                       setOpenDropdownId(null);
+                                     }}
+                                     className="w-full px-4 py-2 text-left text-sm text-black dark:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                                   >
+                                     Reload response
+                                   </button>
+                                  <button
+                                    onClick={() => {
+                                      sendFollowUp('Explain this in simpler terms');
+                                      setOpenDropdownId(null);
+                                    }}
+                                    className="w-full px-4 py-2 text-left text-sm text-black dark:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                                  >
+                                    Explain simpler
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      sendFollowUp('Provide more details about this');
+                                      setOpenDropdownId(null);
+                                    }}
+                                    className="w-full px-4 py-2 text-left text-sm text-black dark:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                                  >
+                                    More details
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      sendFollowUp('Try a different approach');
+                                      setOpenDropdownId(null);
+                                    }}
+                                    className="w-full px-4 py-2 text-left text-sm text-black dark:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                                  >
+                                    Try another version
+                                  </button>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              ))}
+
+              {/* Typing Indicator */}
+              {isTyping && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex justify-start"
+                >
+                  <div className="max-w-3xl w-full bg-white dark:bg-black rounded-2xl p-4 mr-12">
+                    <div className="flex items-start gap-3">
+                      <motion.div 
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                        className="w-6 h-6 bg-black dark:bg-white rounded-full flex items-center justify-center flex-shrink-0"
+                      >
+                        <Sparkles className="w-3 h-3 text-white" />
+                      </motion.div>
+                      <div className="flex-1">
+                        <div className="font-medium text-sm text-black dark:text-white mb-2">Soul</div>
+                        <div className="flex items-center gap-1">
+                          <div className="flex space-x-1">
+                            <motion.div 
+                              animate={{ y: [-2, 2, -2] }}
+                              transition={{ duration: 0.6, repeat: Infinity }}
+                              className="w-2 h-2 bg-purple-500 rounded-full"
+                            ></motion.div>
+                            <motion.div 
+                              animate={{ y: [-2, 2, -2] }}
+                              transition={{ duration: 0.6, repeat: Infinity, delay: 0.1 }}
+                              className="w-2 h-2 bg-blue-500 rounded-full"
+                            ></motion.div>
+                            <motion.div 
+                              animate={{ y: [-2, 2, -2] }}
+                              transition={{ duration: 0.6, repeat: Infinity, delay: 0.2 }}
+                              className="w-2 h-2 bg-indigo-500 rounded-full"
+                            ></motion.div>
+                          </div>
+                          <span className="text-sm text-black/60 dark:text-white/60 ml-2">Thinking...</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+              
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* Input Area */}
+      <motion.footer 
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        className="sticky bottom-0 bg-white dark:bg-black backdrop-blur-xl border-t border-black/10 dark:border-white/10 px-4 py-4"
+      >
+        <div className="max-w-4xl mx-auto">
+          {/* Uploaded Files */}
+          {uploadedFiles.length > 0 && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className="flex flex-wrap gap-2 mb-3"
+            >
+              {uploadedFiles.map((file) => (
+                <motion.div 
+                  key={file.id} 
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  exit={{ scale: 0 }}
+                  className="flex items-center gap-2 bg-black/5 dark:bg-white/5 rounded-full px-3 py-1.5 text-sm"
+                >
+                  <FileText className="w-3 h-3 text-black dark:text-white" />
+                  <span className="text-black dark:text-white truncate max-w-32">{file.name}</span>
+                  <motion.button
+                    whileHover={{ scale: 1.2 }}
+                    whileTap={{ scale: 0.8 }}
+                    onClick={() => removeFile(file.id)}
+                    className="text-black/60 dark:text-white/60 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </motion.button>
+                </motion.div>
+              ))}
+            </motion.div>
+          )}
+
+          {/* Input Container */}
+          <div className="relative">
+            <motion.div 
+              whileHover={{ scale: 1.01 }}
+              className="flex items-end gap-3 bg-black/5 dark:bg-white/5 rounded-2xl transition-all duration-300"
+            >
+              {/* Upload Button */}
+              <motion.button
+                whileHover={{ scale: 1.1, rotate: 5 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={() => fileInputRef.current?.click()}
+                className="p-3 text-black/60 dark:text-white/60 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+                title="Upload file"
+              >
+                <Upload className="w-5 h-5" />
+              </motion.button>
+
+              {/* Text Input */}
+              <textarea
+                ref={inputRef}
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Ask Soul anything..."
+                className="flex-1 bg-transparent border-none outline-none resize-none py-3 text-black dark:text-white placeholder-black/50 dark:placeholder-white/50 min-h-[24px] max-h-[144px]"
+                rows={1}
+                style={{
+                  height: 'auto',
+                  minHeight: '24px',
+                  maxHeight: '144px'
+                }}
+                onInput={(e) => {
+                  const target = e.target as HTMLTextAreaElement;
+                  target.style.height = 'auto';
+                  target.style.height = Math.min(target.scrollHeight, 144) + 'px';
+                }}
+              />
+
+              {/* Send Button */}
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleSendMessage}
+                disabled={!inputMessage.trim() && uploadedFiles.length === 0}
+                className={`p-3 rounded-xl transition-all duration-300 ${
+                  inputMessage.trim() || uploadedFiles.length > 0
+                    ? 'bg-black dark:bg-white text-white dark:text-black hover:bg-black/80 dark:hover:bg-white/80'
+                    : 'bg-black/10 dark:bg-white/10 text-black/40 dark:text-white/40 cursor-not-allowed'
+                }`}
+              >
+                <Send className="w-5 h-5" />
+              </motion.button>
+            </motion.div>
+
+            {/* File Input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept=".pdf,.txt,.doc,.docx,.png,.jpg,.jpeg,.gif"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+          </div>
+
+          {/* Input Helper Text */}
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            className="text-xs text-black/50 dark:text-white/50 mt-2 text-center"
+          >
+            Press Enter to send, Shift + Enter for new line
+          </motion.div>
+        </div>
+      </motion.footer>
+
+      {/* My Files Modal */}
+      <AnimatePresence>
+        {showFilesModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowFilesModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white dark:bg-black rounded-2xl p-6 max-w-md w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
+                  <Folder className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  My Files
+                </h3>
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => setShowFilesModal(false)}
+                  className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-colors"
+                >
+                  <X className="w-4 h-4 text-black/60 dark:text-white/60" />
+                </motion.button>
+              </div>
+              <div className="text-center py-8">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: 0.2 }}
+                  className="w-16 h-16 bg-black dark:bg-white rounded-2xl flex items-center justify-center mx-auto mb-4"
+                >
+                  <FileText className="w-8 h-8 text-white" />
+                </motion.div>
+                <p className="text-black/60 dark:text-white/60 mb-4">No files uploaded yet</p>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-4 py-2 bg-black dark:bg-white text-white dark:text-black rounded-lg hover:bg-black/80 dark:hover:bg-white/80 transition-all duration-300"
+                >
+                  Upload Files
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Help Modal */}
+      <AnimatePresence>
+        {showHelpModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowHelpModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white dark:bg-black rounded-2xl p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
+                  <HelpCircle className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  Help & Support
+                </h3>
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => setShowHelpModal(false)}
+                  className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-colors"
+                >
+                  <X className="w-4 h-4 text-black/60 dark:text-white/60" />
+                </motion.button>
+              </div>
+              
+              <div className="space-y-4">
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="p-4 bg-black/5 dark:bg-white/5 rounded-xl"
+                >
+                  <h4 className="font-medium text-black dark:text-white mb-2">Getting Started</h4>
+                  <p className="text-sm text-black/60 dark:text-white/60">Type your message in the input box and press Enter to start a conversation with Soul.</p>
+                </motion.div>
+                
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="p-4 bg-black/5 dark:bg-white/5 rounded-xl"
+                >
+                  <h4 className="font-medium text-black dark:text-white mb-2">File Uploads</h4>
+                  <p className="text-sm text-black/60 dark:text-white/60">Click the upload button to attach files to your messages. Supported formats: PDF, TXT, DOC, DOCX, PNG, JPG, JPEG, GIF.</p>
+                </motion.div>
+                
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className="p-4 bg-black/5 dark:bg-white/5 rounded-xl"
+                >
+                  <h4 className="font-medium text-black dark:text-white mb-2">Keyboard Shortcuts</h4>
+                  <ul className="text-sm text-black/60 dark:text-white/60 space-y-1">
+                    <li>• Enter: Send message</li>
+                    <li>• Shift + Enter: New line</li>
+                    <li>• Ctrl/Cmd + K: New chat</li>
+                  </ul>
+                </motion.div>
+                
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.4 }}
+                  className="flex gap-2 pt-4"
+                >
+                  <motion.a
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    href="#"
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-black dark:bg-white text-white dark:text-black rounded-lg hover:bg-black/80 dark:hover:bg-white/80 transition-all duration-300 text-sm"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    Documentation
+                  </motion.a>
+                  <motion.a
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    href="#"
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-black dark:bg-white text-white dark:text-black rounded-lg hover:bg-black/80 dark:hover:bg-white/80 transition-all duration-300 text-sm"
+                  >
+                    <HelpCircle className="w-4 h-4" />
+                    Support
+                  </motion.a>
+                </motion.div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+export default ChatInterface;
